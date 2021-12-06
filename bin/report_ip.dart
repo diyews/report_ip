@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:github/github.dart';
@@ -9,6 +10,7 @@ void main(List<String> arguments) async {
     ..addOption('token', abbr: 't', help: 'Personal access token')
     ..addOption('interval',
         abbr: 'i', help: 'Interval of update, in minutes', defaultsTo: '30')
+    ..addFlag('once', help: 'Run just one time', negatable: false)
     ..addFlag('help', abbr: 'h', help: 'Usage', negatable: false);
 
   final ArgResults parserResult = parser.parse(arguments);
@@ -31,13 +33,23 @@ void main(List<String> arguments) async {
           .commit!
           .sha!;
 
-  doLoop(github, repositorySlug, sha, interval: interval);
+  if (parserResult['once']) {
+    syncGithub(github, repositorySlug, sha).whenComplete(() {
+      github.dispose();
+    });
+  } else {
+    doLoop(github, repositorySlug, sha, interval: interval);
+  }
 }
 
 Future<Timer> doLoop(GitHub gitHub, RepositorySlug slug, String sha,
     {required int interval}) async {
   /* about 3~6 seconds */
-  await syncGithub(gitHub, slug, sha);
+  try {
+    await syncGithub(gitHub, slug, sha);
+  } catch (e) {
+    stderr.writeln(e);
+  }
 
   return Timer(Duration(minutes: interval),
       () => doLoop(gitHub, slug, sha, interval: interval));
